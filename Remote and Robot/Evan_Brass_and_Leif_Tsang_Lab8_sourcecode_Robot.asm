@@ -61,14 +61,44 @@
 ;***********************************************************
 INIT:
 	;Stack Pointer (VERY IMPORTANT!!!!)
+	ldi		mpr, low(RAMEND)
+	out		SPL, mpr		; Load SPL(PORT) with low byte of RAMEND
+	ldi		mpr, high(RAMEND)
+	out		SPH, mpr		; Load SPH with high byte of RAMEND
+
 	;I/O Ports
+	;Initialize port B
+	ldi		mpr, 0b11111111		;Configure LED's and set leds to output
+	out		DDRB, mpr
+	ldi		mpr, 0b00000000
+	out		PORTB, mpr
+
 	;USART1
-		;Set baudrate at 2400bps
-		;Enable receiver and enable receive interrupts
-		;Set frame format: 8 data bits, 2 stop bits
+	; Set frame format: 8 data bits, 2 stop bits
+	ldi		mpr, 0b00001110		;pin 6:0 Transmission Mode, pin 2:1 Data frame, pin 3 2 stop bits
+	out		UCSR1C, mpr
+	ldi		mpr, 0b10010000		;Enable receiver pin 5 and enable receive interrupts pin 7, pin 2 data frame
+	out		UCSR1B, mpr
+	ldi		mpr, 0b00000000
+	out		UCSR1A, mpr
+
+	ldi		mpr, L(415)			;Set baudrate at 2400bps
+	out		UBRR1L, mpr
+	ldi		mpr, H(415)
+	out		UBRR1H, mpr
+		
+
+		
+
 	;External Interrupts
-		;Set the External Interrupt Mask
-		;Set the Interrupt Sense Control to falling edge detection
+	;Set the External Interrupt Mask
+	ldi		mpr, 0b00000001
+	out		EIMSK, mpr
+
+	;Set the Interrupt Sense Control to falling edge detection
+	ldi		mpr, 0b00000010  ;0b10 for falling edge for interrupt
+	sts		EICRA, mpr
+		
 
 	;Other
 

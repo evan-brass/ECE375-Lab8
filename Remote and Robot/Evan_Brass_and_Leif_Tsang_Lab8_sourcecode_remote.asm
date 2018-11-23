@@ -51,11 +51,32 @@
 ;***********************************************************
 INIT:
 	;Stack Pointer (VERY IMPORTANT!!!!)
+	ldi		mpr, low(RAMEND)
+	out		SPL, mpr		; Load SPL(PORT) with low byte of RAMEND
+	ldi		mpr, high(RAMEND)
+	out		SPH, mpr		; Load SPH with high byte of RAMEND
+
 	;I/O Ports
+	ldi		mpr, 0b11111111   ;Configure LED's and set leds to output
+	out		DDRB, mpr
+	ldi		mpr, 0b01100000
+	out		PORTB, mpr
+
 	;USART1
-		;Set baudrate at 2400bps
-		;Enable transmitter
-		;Set frame format: 8 data bits, 2 stop bits
+	;Set frame format: 8 data bits, 2 stop bits
+	ldi		mpr, 0b00001110		;Data frame pin 2:1, 2 stop bit pin 3
+	out		UCSR1C, mpr
+	ldi		mpr, 0b00001000		;Enable transmitter pin 3, Data Frame pin 2
+	out		UCSR1B, mpr
+	ldi		mpr, 0b00000000	
+	out		UCSR1A, mpr
+
+	ldi		mpr, L(415)			;Set baudrate at 2400bps
+	out		UBRR1L, mpr
+	ldi		mpr, H(415)
+	out		UBRR1H, mpr
+	
+		
 
 	;Other
 
