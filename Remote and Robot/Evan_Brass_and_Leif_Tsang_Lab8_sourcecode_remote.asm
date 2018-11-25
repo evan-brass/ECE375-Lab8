@@ -19,19 +19,15 @@
 ;*	Internal Register Definitions and Constants
 ;***********************************************************
 .def	mpr = r16				; Multi-Purpose Register
+.def prev = r17
 
-.equ	EngEnR = 4				; Right Engine Enable Bit
-.equ	EngEnL = 7				; Left Engine Enable Bit
-.equ	EngDirR = 5				; Right Engine Direction Bit
-.equ	EngDirL = 6				; Left Engine Direction Bit
-; Use these action codes between the remote and robot
-; MSB = 1 thus:
-; control signals are shifted right by one and ORed with 0b10000000 = $80
-.equ	MovFwd =  ($80|1<<(EngDirR-1)|1<<(EngDirL-1))	;0b10110000 Move Forward Action Code
-.equ	MovBck =  ($80|$00)								;0b10000000 Move Backward Action Code
-.equ	TurnR =   ($80|1<<(EngDirL-1))					;0b10100000 Turn Right Action Code
-.equ	TurnL =   ($80|1<<(EngDirR-1))					;0b10010000 Turn Left Action Code
-.equ	Halt =    ($80|1<<(EngEnR-1)|1<<(EngEnL-1))		;0b11001000 Halt Action Code
+.equ	MovFwd = 0b10110000 ; Move Forward Action Code
+.equ	MovBck = 0b10000000 ; Move Backward Action Code
+.equ	TurnR = 0b10100000 ; Turn Right Action Code
+.equ	TurnL = 0b10010000 ; Turn Left Action Code
+.equ	Halt =  0b11001000 ; Halt Action Code
+
+.equ	BotAddress = 0b01010101;(Enter your robot's address here (8 bits))
 
 ;***********************************************************
 ;*	Start of Code Segment
@@ -84,13 +80,49 @@ INIT:
 ;*	Main Program
 ;***********************************************************
 MAIN:
-	;TODO: ???
-		rjmp	MAIN
+	in mpr, PIND
+	cp mpr, prev
+	breq MAIN
+	; A button was pressed or released
+	; (Order of operations if multiple buttons pressed)
+	sbrs mpr, btnInc
+	rcall inc_bright
+
+	sbrs mpr, btnDec
+	rcall dec_bright
+
+	sbrs mpr, btnMin
+	rcall min_bright
+
+	sbrs mpr, btnMax
+	rcall max_bright
+
+	; Set a new previous
+	mov prev, mpr
+
+	; debounce
+	ldi waitcnt, 10
+Loop:	
+	ldi	olcnt, 224
+OLoop:	
+	ldi	ilcnt, 237
+ILoop:	
+	dec	ilcnt
+	brne ILoop
+	dec	olcnt
+	brne OLoop
+	dec	waitcnt
+	brne Loop
+
+	; Restart
+	rjmp	MAIN
 
 ;***********************************************************
 ;*	Functions and Subroutines
 ;***********************************************************
+send:
 
+	ret
 ;***********************************************************
 ;*	Stored Program Data
 ;***********************************************************
