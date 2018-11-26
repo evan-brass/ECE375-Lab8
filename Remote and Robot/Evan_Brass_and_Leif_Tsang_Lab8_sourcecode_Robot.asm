@@ -20,7 +20,11 @@
 ;***********************************************************
 .def	mpr = r16				; Multi-Purpose Register
 .def	selected = r17			; Non zero if the last received address byte was the same as our bot address
+.def	waitcnt = r18			; Wait Loop Counter
+.def	ilcnt = r19
+.def	olcnt = r20
 
+.equ	WTime = 100				; Time to wait in wait loop
 .equ	BotAddress = 0b01010101;(Enter your robot's address here (8 bits))
 
 ;/////////////////////////////////////////////////////////////
@@ -82,7 +86,7 @@ INIT:
 	ldi		mpr, 0b00000000
 	sts		UCSR1A, mpr
 
-	ldi		mpr, low(415)			;Set baudrate at 2400bps
+	ldi		mpr, low(415)		;Set baudrate at 2400bps
 	sts		UBRR1L, mpr
 	ldi		mpr, high(415)
 	sts		UBRR1H, mpr
@@ -106,13 +110,88 @@ MAIN:
 
 ; Handle the right whisker
 right_whisker:
-	
+
+	push mpr			; Save mpr register
+	push waitcnt		; Save wait register
+	in mpr, SREG		; Save program state
+	push mpr 
+
+	; Move Backwards for a second
+	ldi mpr, MovBck		; Load Move Backwards command
+	out PORTB, mpr		; Send command to port
+	ldi waitcnt, Wtime	; Wait for 1 second
+	rcall Wait			; Call wait function
+
+	; Turn left for a second
+	ldi mpr, TurnL		; Load Turn Left Command
+	out PORTB, mpr		; Send command to port
+	ldi waitcnt, Wtime	; Wait for 1 second
+	rcall Wait			; Call wait function
+
+	pop mpr				; Restore program state
+	out SREG, mpr 
+	pop waitcnt			; Restore wait register
+	pop mpr				; Restore mpr
+
+	ldi mpr, 0b11111111
+	out EIFR, mpr
+	sei
+
 	reti
 
 ; Handle the left whisker
 left_whisker:
-	
+	push mpr			; Save mpr register
+	push waitcnt		; Save wait register
+	in mpr, SREG		; Save program state
+	push mpr 
+
+	; Move Backwards for a second
+	ldi mpr, MovBck		; Load Move Backwards command
+	out PORTB, mpr		; Send command to port
+	ldi waitcnt, Wtime	; Wait for 1 second
+	rcall Wait			; Call wait function
+
+	; Turn right for a second
+	ldi mpr, TurnR		; Load Turn Left Command
+	out PORTB, mpr		; Send command to port
+	ldi waitcnt, Wtime	; Wait for 1 second
+	rcall Wait			; Call wait function
+
+	pop mpr				; Restore program state
+	out SREG, mpr 
+	pop waitcnt			; Restore wait register
+	pop mpr				; Restore mpr
+		
+	ldi mpr, 0b11111111
+	out EIFR, mpr
+	sei
+
 	reti
+
+Wait:
+	push	waitcnt			; Save wait register
+	push	ilcnt			; Save ilcnt register
+	push	olcnt			; Save olcnt register
+
+Loop:	
+	ldi		olcnt, 224		; load olcnt register
+OLoop:	
+	ldi		ilcnt, 237		; load ilcnt register
+ILoop:	
+	dec		ilcnt			; decrement ilcnt
+	brne	ILoop			; Continue Inner Loop
+	dec		olcnt			; decrement olcnt
+	brne	OLoop			; Continue Outer Loop
+	dec		waitcnt			; Decrement wait 
+	brne	Loop			; Continue Wait loop	
+
+	pop		olcnt			; Restore olcnt register
+	pop		ilcnt			; Restore ilcnt register
+	pop		waitcnt			; Restore wait register
+
+	ret
+
 
 ; Handle Data that's ready from the controller
 rx_complete:
