@@ -39,6 +39,24 @@
 ;***********************************************************
 .org	$0000					; Beginning of IVs
 		rjmp 	INIT			; Reset interrupt
+.org	$0002
+		rjmp	Mov_Forward		;move forward func
+		reti
+.org	$0004
+		rjmp	Mov_Backward	;move Backward func
+		reti
+.org	$0006
+		rjmp	Turn_Right		;Turn right Func
+		reti
+.org	$0008
+		rjmp	Turn_Left		;Turn left Func
+		reti
+.org	$000A
+		rjmp	Halt			;Stop everything Func
+		reti
+.org	$000C
+		rjmp	Freeze			;freeze for 5 second func
+		reti
 
 .org	$0046					; End of Interrupt Vectors
 
@@ -55,7 +73,7 @@ INIT:
 	;I/O Ports
 	ldi		mpr, 0b11111111   ;Configure LED's and set leds to output
 	out		DDRB, mpr
-	ldi		mpr, 0b01100000
+	ldi		mpr, 0b01100000   ;Lights on 6 and 7 are on
 	out		PORTB, mpr
 
 	;USART1
@@ -85,17 +103,23 @@ MAIN:
 	breq MAIN
 	; A button was pressed or released
 	; (Order of operations if multiple buttons pressed)
-	sbrs mpr, btnInc
-	rcall inc_bright
+	sbrs mpr, 0
+	rcall Mov_Forward
 
-	sbrs mpr, btnDec
-	rcall dec_bright
+	sbrs mpr, 1
+	rcall Mov_Backward
 
-	sbrs mpr, btnMin
-	rcall min_bright
+	sbrs mpr, 2
+	rcall Turn_Right
 
-	sbrs mpr, btnMax
-	rcall max_bright
+	sbrs mpr, 3
+	rcall Turn_Left
+
+	sbrs mpr, 4
+	rcall Halt
+
+	sbrs mpr, 5
+	rcall Freeze
 
 	; Set a new previous
 	mov prev, mpr
@@ -120,9 +144,87 @@ ILoop:
 ;***********************************************************
 ;*	Functions and Subroutines
 ;***********************************************************
-send:
+;Send signal to bot to move forward
+Mov_Forward:
+	sbis	UCSR1A, UDRE1
+	rjump	Mov_Forward
+	out		UDR1, BotAddress
 
+Mov_Forward1:
+	sbis	UCSR1A, UDRE1
+	rjump	Mov_Forward1
+	out		UDR1, 0b10110000
 	ret
+
+
+
+;Send signal to bot to move backwards
+Mov_Backward:
+	sbis	UCSR1A, UDRE1
+	rjump	Mov_Backward
+	out		UDR1, BotAddress
+
+Mov_Backward1:
+	sbis	UCSR1A, UDRE1
+	rjump	Mov_Backward1
+	out		UDR1, 0b10000000
+	ret
+
+
+
+;Send signal to bot to turn right
+Turn_Right:
+	sbis	UCSR1A, UDRE1
+	rjump	Turn_Right
+	out		UDR1, BotAddress
+
+Turn_Right1:
+	sbis	UCSR1A, UDRE1
+	rjump	Turn_Right1
+	out		UDR1, 0b10100000
+	ret
+
+
+
+;Send signal to bot to turn left
+Turn_Left:
+	sbis	UCSR1A, UDRE1
+	rjump	Turn_Left
+	out		UDR1, BotAddress
+
+Turn_Left1:
+	sbis	UCSR1A, UDRE1
+	rjump	Turn_Left1
+	out		UDR1, 0b10010000
+	ret
+
+
+
+;Send signal to bot to stop doing anything
+Halt:
+	sbis	UCSR1A, UDRE1
+	rjump	Halt
+	out		UDR1, BotAddress
+Halt1:
+	sbis	UCSR1A, UDRE1
+	rjump	Halt1
+	out		UDR1, 0b11001000
+	ret
+
+
+
+;Send signal to the bot to send out another signal to freeze all bots
+Freeze:
+	sbis	UCSR1A, UDRE1
+	rjump	Freeze
+	out		UDR1, BotAddress
+Freeze1:
+	sbis	UCSR1A, UDRE1
+	rjump	Freeze1
+	out		UDR1, 0b11111000
+	ret
+
+
 ;***********************************************************
 ;*	Stored Program Data
 ;***********************************************************
