@@ -236,7 +236,7 @@ rx_complete:
 	pop mpr
 	reti
 
-wait_5:
+wait_5: ; This still is longer than 5 seconds and I don't know why
 	ldi waitcnt, 100
 	rcall Wait
 	ldi waitcnt, 50
@@ -257,7 +257,7 @@ rx_address_frame:
 	rcall wait_5
 	add frozenCnt, one
 	cpi frozenCnt, 3
-	breq trap
+	breq trap ; This isn't working either.  Robot doesn't restart after only first freeze.
 	pop mpr
 	out PORTB, mpr
 	sei
