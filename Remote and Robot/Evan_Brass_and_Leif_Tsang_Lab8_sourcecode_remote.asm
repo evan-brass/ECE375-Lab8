@@ -20,12 +20,17 @@
 ;***********************************************************
 .def	mpr = r16				; Multi-Purpose Register
 .def prev = r17
+.def waitcnt = r18
+.def ilcnt = r19
+.def olcnt = r20
+.def data = r21
 
-.equ	MovFwd = 0b10110000 ; Move Forward Action Code
-.equ	MovBck = 0b10000000 ; Move Backward Action Code
-.equ	TurnR = 0b10100000 ; Turn Right Action Code
-.equ	TurnL = 0b10010000 ; Turn Left Action Code
-.equ	Halt =  0b11001000 ; Halt Action Code
+.equ	C_MovFwd = 0b10110000 ; Move Forward Action Code
+.equ	C_MovBck = 0b10000000 ; Move Backward Action Code
+.equ	C_TurnR = 0b10100000 ; Turn Right Action Code
+.equ	C_TurnL = 0b10010000 ; Turn Left Action Code
+.equ	C_Halt =  0b11001000 ; Halt Action Code
+.equ	C_Freeze = 0b11111000 ; Freeze Action Code
 
 .equ	BotAddress = 0b01010101;(Enter your robot's address here (8 bits))
 
@@ -37,28 +42,10 @@
 ;***********************************************************
 ;*	Interrupt Vectors
 ;***********************************************************
-.org	$0000					; Beginning of IVs
-		rjmp 	INIT			; Reset interrupt
-.org	$0002
-		rjmp	Mov_Forward		;move forward func
-		reti
-.org	$0004
-		rjmp	Mov_Backward	;move Backward func
-		reti
-.org	$0006
-		rjmp	Turn_Right		;Turn right Func
-		reti
-.org	$0008
-		rjmp	Turn_Left		;Turn left Func
-		reti
-.org	$000A
-		rjmp	Halt			;Stop everything Func
-		reti
-.org	$000C
-		rjmp	Freeze			;freeze for 5 second func
-		reti
+.org $0000					; Beginning of IVs
+		rjmp 	INIT		; Reset interrupt
 
-.org	$0046					; End of Interrupt Vectors
+.org $0046					; End of Interrupt Vectors
 
 ;***********************************************************
 ;*	Program Initialization
@@ -76,19 +63,24 @@ INIT:
 	ldi		mpr, 0b01100000   ;Lights on 6 and 7 are on
 	out		PORTB, mpr
 
+	ldi mpr, 0b00000000
+	out DDRD, mpr
+	ldi mpr, 0b11111111
+	out PORTD, mpr 
+
 	;USART1
 	;Set frame format: 8 data bits, 2 stop bits
 	ldi		mpr, 0b00001110		;Data frame pin 2:1, 2 stop bit pin 3
-	out		UCSR1C, mpr
+	sts		UCSR1C, mpr
 	ldi		mpr, 0b00001000		;Enable transmitter pin 3, Data Frame pin 2
-	out		UCSR1B, mpr
+	sts		UCSR1B, mpr
 	ldi		mpr, 0b00000000	
-	out		UCSR1A, mpr
+	sts		UCSR1A, mpr
 
-	ldi		mpr, L(415)			;Set baudrate at 2400bps
-	out		UBRR1L, mpr
-	ldi		mpr, H(415)
-	out		UBRR1H, mpr
+	ldi		mpr, low(415)			;Set baudrate at 2400bps
+	sts		UBRR1L, mpr
+	ldi		mpr, high(415)
+	sts		UBRR1H, mpr
 	
 		
 
@@ -102,30 +94,42 @@ MAIN:
 	cp mpr, prev
 	breq MAIN
 	; A button was pressed or released
+;	out PORTB, mpr
+;	rjmp Main_End
 	; (Order of operations if multiple buttons pressed)
 	sbrs mpr, 0
-	rcall Mov_Forward
+	rjmp Mov_Forward
 
 	sbrs mpr, 1
-	rcall Mov_Backward
+	rjmp Mov_Backward
 
 	sbrs mpr, 2
-	rcall Turn_Right
-
-	sbrs mpr, 3
-	rcall Turn_Left
+	rjmp Turn_Right
 
 	sbrs mpr, 4
-	rcall Halt
+	rjmp Turn_Left
 
 	sbrs mpr, 5
-	rcall Freeze
+	rjmp Halt
 
+	sbrs mpr, 6
+	rjmp Freeze
+
+Main_End:
 	; Set a new previous
 	mov prev, mpr
 
 	; debounce
-	ldi waitcnt, 10
+	ldi waitcnt, 1
+	rcall Wait
+
+	; Restart
+	rjmp	MAIN
+
+;***********************************************************
+;*	Functions and Subroutines
+;***********************************************************
+Wait:
 Loop:	
 	ldi	olcnt, 224
 OLoop:	
@@ -137,93 +141,58 @@ ILoop:
 	brne OLoop
 	dec	waitcnt
 	brne Loop
-
-	; Restart
-	rjmp	MAIN
-
-;***********************************************************
-;*	Functions and Subroutines
-;***********************************************************
-;Send signal to bot to move forward
-Mov_Forward:
-	sbis	UCSR1A, UDRE1
-	rjump	Mov_Forward
-	out		UDR1, BotAddress
-
-Mov_Forward1:
-	sbis	UCSR1A, UDRE1
-	rjump	Mov_Forward1
-	out		UDR1, 0b10110000
 	ret
 
+; Not quite a subroutine
+Send_Command:
+	push mpr
+	; Send Bot address
+	ldi mpr, BotAddress
+	sts UDR1, mpr
+Wait_On_Address:
+	lds mpr, UCSR1A
+	sbrs mpr, UDRE1
+	rjmp Wait_On_Address
+	; Send Command
+	sts UDR1, data
+Wait_On_Command:
+	lds mpr, UCSR1A
+	sbrs mpr, UDRE1
+	rjmp Wait_On_Command
+	; Done
+	out PORTB, data
+	pop mpr
+	rjmp Main_End
 
+;Send signal to bot to move forward
+Mov_Forward:
+	ldi data, C_MovFwd
+	rjmp Send_Command
 
 ;Send signal to bot to move backwards
 Mov_Backward:
-	sbis	UCSR1A, UDRE1
-	rjump	Mov_Backward
-	out		UDR1, BotAddress
-
-Mov_Backward1:
-	sbis	UCSR1A, UDRE1
-	rjump	Mov_Backward1
-	out		UDR1, 0b10000000
-	ret
-
-
+	ldi data, C_MovBck
+	rjmp Send_Command
 
 ;Send signal to bot to turn right
 Turn_Right:
-	sbis	UCSR1A, UDRE1
-	rjump	Turn_Right
-	out		UDR1, BotAddress
-
-Turn_Right1:
-	sbis	UCSR1A, UDRE1
-	rjump	Turn_Right1
-	out		UDR1, 0b10100000
-	ret
-
-
+	ldi data, C_TurnR
+	rjmp Send_Command
 
 ;Send signal to bot to turn left
 Turn_Left:
-	sbis	UCSR1A, UDRE1
-	rjump	Turn_Left
-	out		UDR1, BotAddress
-
-Turn_Left1:
-	sbis	UCSR1A, UDRE1
-	rjump	Turn_Left1
-	out		UDR1, 0b10010000
-	ret
-
-
+	ldi data, C_TurnL
+	rjmp Send_Command
 
 ;Send signal to bot to stop doing anything
 Halt:
-	sbis	UCSR1A, UDRE1
-	rjump	Halt
-	out		UDR1, BotAddress
-Halt1:
-	sbis	UCSR1A, UDRE1
-	rjump	Halt1
-	out		UDR1, 0b11001000
-	ret
-
-
+	ldi data, C_Halt
+	rjmp Send_Command
 
 ;Send signal to the bot to send out another signal to freeze all bots
 Freeze:
-	sbis	UCSR1A, UDRE1
-	rjump	Freeze
-	out		UDR1, BotAddress
-Freeze1:
-	sbis	UCSR1A, UDRE1
-	rjump	Freeze1
-	out		UDR1, 0b11111000
-	ret
-
+	ldi data, C_Freeze
+	rjmp Send_Command
 
 ;***********************************************************
 ;*	Stored Program Data

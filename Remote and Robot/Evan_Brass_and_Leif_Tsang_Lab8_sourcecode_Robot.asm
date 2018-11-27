@@ -195,13 +195,22 @@ ILoop:
 
 ; Handle Data that's ready from the controller
 rx_complete:
+	; Check if our robot is selected
+	cpi selected, BotAddress
+	breq rx_command_frame_done
+	; Check what command has been sent
 	push mpr
 	lds mpr, UDR1
+	; - BEGIN DEBUG -
+;	out PORTB, mpr
+;	pop mpr
+;	reti
+	; - END DEBUG -
 	; Check if this is an address or command frame
-	sbrs mpr, 8
+	sbrs mpr, 7
 	rcall rx_address_frame
 
-	sbrc mpr, 8
+	sbrc mpr, 7
 	rcall rx_command_frame
 
 	pop mpr
