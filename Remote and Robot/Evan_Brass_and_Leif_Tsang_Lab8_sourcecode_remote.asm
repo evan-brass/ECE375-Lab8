@@ -32,7 +32,7 @@
 .equ	C_Halt =  0b11001000 ; Halt Action Code
 .equ	C_Freeze = 0b11111000 ; Freeze Action Code
 
-.equ	BotAddress = 0b01010101;(Enter your robot's address here (8 bits))
+.equ	BotAddress = 0b01100110;(Enter your robot's address here (8 bits))
 
 ;***********************************************************
 ;*	Start of Code Segment

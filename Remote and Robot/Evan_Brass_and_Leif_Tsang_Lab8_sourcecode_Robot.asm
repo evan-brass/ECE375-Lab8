@@ -25,7 +25,7 @@
 .def	olcnt = r20
 
 .equ	WTime = 100				; Time to wait in wait loop
-.equ	BotAddress = 0b01010101;(Enter your robot's address here (8 bits))
+.equ	BotAddress = 0b01100110;(Enter your robot's address here (8 bits))
 
 ;/////////////////////////////////////////////////////////////
 ;These macros are the values to make the TekBot Move.
