@@ -115,6 +115,19 @@ MAIN:
 	sbrs mpr, 6
 	rjmp Freeze
 
+	; Debugging - send freeze command from remote
+	cpi mpr, 0b01111111
+	brne Main_End
+	
+	ldi data, 0b01010101
+	sts UDR1, data
+DEBUG_Send_Freeze:
+	lds mpr, UCSR1A
+	sbrs mpr, UDRE1
+	rjmp DEBUG_Send_Freeze
+	; Done
+	out PORTB, data
+
 Main_End:
 	; Set a new previous
 	mov prev, mpr
