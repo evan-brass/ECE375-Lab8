@@ -23,8 +23,8 @@
 .def	waitcnt = r18			; Wait Loop Counter
 .def	ilcnt = r19
 .def	olcnt = r20
-.def frozenCnt = r21
-.def one = r22
+.def	lives = r21
+.def	command = r22
 
 .equ	WTime = 100				; Time to wait in wait loop
 .equ	BotAddress = 0b01100110;(Enter your robot's address here (8 bits))
@@ -81,17 +81,19 @@ INIT:
 	ldi		mpr, high(RAMEND)
 	out		SPH, mpr		; Load SPH with high byte of RAMEND
 
-	; Initialize one register
-	ldi one, 1
-	; Clear frozenCnt
-	clr frozenCnt
+	; Initialize lives register
+	ldi lives, 3
+
+	ldi waitcnt, 100
 
 	;I/O Ports
 	;Initialize port B
 	ldi		mpr, 0b11111111		;Configure LED's and set leds to output
 	out		DDRB, mpr
-	ldi		mpr, 0b00000000
+	ldi		mpr, 0b11110000
 	out		PORTB, mpr
+
+	ldi command, 0b11110000
 
 	;USART1
 	; Set frame format: 8 data bits, 2 stop bits
@@ -131,8 +133,7 @@ right_whisker:
 	in mpr, SREG		; Save program state
 	push mpr 
 
-	in mpr, PINB ; Save what the robot was doing so we can restore it later
-	push mpr
+	rcall Disable_Receive
 
 	; Move Backwards for a second
 	ldi mpr, MovBck		; Load Move Backwards command
@@ -146,8 +147,9 @@ right_whisker:
 	ldi waitcnt, Wtime	; Wait for 1 second
 	rcall Wait			; Call wait function
 
-	pop mpr ; Restore what the robot was doing before the whisker was hit
-	out PORTB, mpr
+	out PORTB, command
+
+	rcall Enable_Receive
 
 	pop mpr				; Restore program state
 	out SREG, mpr 
@@ -163,10 +165,9 @@ left_whisker:
 	push mpr			; Save mpr register
 	push waitcnt		; Save wait register
 	in mpr, SREG		; Save program state
-	push mpr 
-	
-	in mpr, PINB ; Save what the robot was doing so we can restore it later
 	push mpr
+
+	rcall Disable_Receive
 
 	; Move Backwards for a second
 	ldi mpr, MovBck		; Load Move Backwards command
@@ -180,8 +181,9 @@ left_whisker:
 	ldi waitcnt, Wtime	; Wait for 1 second
 	rcall Wait			; Call wait function
 
-	pop mpr ; Restore what the robot was doing before the whisker was hit
-	out PORTB, mpr
+	out PORTB, command
+
+	rcall Enable_Receive
 
 	pop mpr				; Restore program state
 	out SREG, mpr 
@@ -215,6 +217,38 @@ ILoop:
 
 	ret
 
+Disable_Receive:
+	push mpr
+	lds mpr, UCSR1B
+	andi mpr, 0b11101111
+	sts UCSR1B, mpr
+	pop mpr
+	ret
+
+Enable_Receive:
+	push mpr
+	lds mpr, UCSR1B
+	ori mpr, 0b00010000
+	sts UCSR1B, mpr
+	pop mpr
+	ret
+	
+Enable_Transmit:
+	push mpr
+	; Enable Transmitter
+	lds mpr, UCSR1B
+	ori mpr, 0b00001000
+	sts UCSR1B, mpr
+	pop mpr
+	ret
+Disable_Transmit:
+	push mpr
+	; Enable Transmitter
+	lds mpr, UCSR1B
+	andi mpr, 0b11110111
+	sts UCSR1B, mpr
+	pop mpr
+	ret
 
 ; Handle Data that's ready from the controller
 rx_complete:
@@ -222,9 +256,15 @@ rx_complete:
 	push mpr
 	lds mpr, UDR1
 	; - BEGIN DEBUG -
+;	push lives
+;	in lives, PINB
 ;	out PORTB, mpr
-;	pop mpr
-;	reti
+;	ldi waitcnt, 50
+;	rcall Wait
+;
+;	ldi waitcnt, 100
+;	out PORTB, lives
+;	pop lives
 	; - END DEBUG -
 	; Check if this is an address or command frame
 	sbrs mpr, 7
@@ -233,45 +273,58 @@ rx_complete:
 	sbrc mpr, 7
 	rcall rx_command_frame
 
+	out PORTB, command
 	pop mpr
 	reti
 
 wait_5: ; This still is longer than 5 seconds and I don't know why
-	ldi waitcnt, 100
 	rcall Wait
-	ldi waitcnt, 50
+	rcall Wait
+	rcall Wait
+	rcall Wait
 	rcall Wait
 	ret
 
 ; Handle Address Frames
 rx_address_frame:
+	push mpr
 	; Check for Freeze
 	cpi mpr, Freeze
 	brne rx_address_not_frozen
 	; Handle freeze
-	cli
-	in mpr, PINB ; Get previous command so that we can restore it.
-	push mpr
+	rcall Disable_Receive
+
 	ldi mpr, Halt
 	out PORTB, mpr
 	rcall wait_5
-	add frozenCnt, one
-	cpi frozenCnt, 3
-	breq trap ; This isn't working either.  Robot doesn't restart after only first freeze.
-	pop mpr
-	out PORTB, mpr
-	sei
-	ret
-trap: ; Infinite Loop
-	rjmp trap
+
+	clr selected
+	
+	; Disable and Enable Receiver (This is just to clear the TXC flag)
+	rcall Enable_Receive
+
+	; Keep track of lives
+	dec lives
+;	out PORTB, lives
+;	rcall Wait
+;	cpi lives, 0
+	breq trap
+
+	rjmp rx_address_end
 rx_address_not_frozen:
 	cpi mpr, BotAddress
 	breq rx_address_frame_match
 	clr selected
-	ret
+	rjmp rx_address_end
 rx_address_frame_match:
 	ldi selected, 1
+
+rx_address_end:
+	pop mpr
 	ret
+
+trap: ; Infinite Loop
+	rjmp trap
 
 ; Handle Command Frames
 rx_command_frame:
@@ -282,36 +335,32 @@ rx_command_frame:
 	cpi mpr, C_MovFwd
 	brne check_MovBck
 	; Handle MovFwd
-	ldi mpr, MovFwd
-	out PORTB, mpr
+	ldi command, MovFwd
 	ret
 check_MovBck:
 	cpi mpr, C_MovBck
 	brne check_TurnR
 	; Handle MovBck
-	ldi mpr, MovBck
-	out PORTB, mpr
+	ldi command, MovBck
 	ret
 check_TurnR:
 	cpi mpr, C_TurnR
 	brne check_TurnL
 	; Handle TurnR
-	ldi mpr, TurnR
-	out PORTB, mpr
+	ldi command, TurnR
 	ret
 check_TurnL:
 	cpi mpr, C_TurnL
 	brne check_Halt
 	; Handle TurnL
-	ldi mpr, TurnL
-	out PORTB, mpr
+	ldi command, TurnL
 	ret
 check_Halt:
 	cpi mpr, C_Halt
 	brne check_Freeze
 	; Handle Halt
-	ldi mpr, Halt
-	out PORTB, mpr
+	ldi command, Halt
+	ret
 check_Freeze:
 	cpi mpr, C_Freeze
 	brne rx_command_frame_done
@@ -324,11 +373,8 @@ rx_command_frame_done:
 HandleFreeze:
 	cli
 	lds mpr, UCSR1B
-	; Disable receiver
-	andi mpr, 0b11101111
-	; Enable Transmitter
-	ori mpr, 0b00001000
-	sts UCSR1B, mpr
+	rcall Disable_Receive
+	rcall Enable_Transmit
 
 Wait_For_Empty:
 	lds mpr, UCSR1A
@@ -342,13 +388,18 @@ Wait_For_Sent:
 	sbrs mpr, TXC1
 	rjmp Wait_For_Sent
 
-	lds mpr, UCSR1B
-	; Disable Transmitter
-	andi mpr, 0b11110111
-	; Enable Receiver
-	ori mpr, 0b00010000
-	sts UCSR1B, mpr
-	; Debounce the IR transmission (so we don't freeze ourselves)
-	ldi waitcnt, 5
+	rcall Disable_Transmit
+	rcall Enable_Receive
+
+	; Debounce receieve
+	push waitcnt
+	ldi waitcnt, 50
+	rcall Wait
+	pop waitcnt
+	lds mpr, UDR1
+	lds mpr, UDR1
+;	rcall Disable_Receive
+;	rcall Enable_Receive
+
 	rcall Wait
 	ret

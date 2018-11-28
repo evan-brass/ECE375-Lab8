@@ -47,6 +47,9 @@
 
 .org $0046					; End of Interrupt Vectors
 
+trap:
+	rjmp trap
+
 ;***********************************************************
 ;*	Program Initialization
 ;***********************************************************
@@ -60,10 +63,8 @@ INIT:
 	;I/O Ports
 	ldi		mpr, 0b11111111   ;Configure LED's and set leds to output
 	out		DDRB, mpr
-	ldi		mpr, 0b01100000   ;Lights on 6 and 7 are on
-	out		PORTB, mpr
 
-	ldi mpr, 0b00000000
+	ldi mpr, 0b00001000
 	out DDRD, mpr
 	ldi mpr, 0b11111111
 	out PORTD, mpr 
@@ -96,29 +97,11 @@ MAIN:
 	; A button was pressed or released
 ;	out PORTB, mpr
 ;	rjmp Main_End
-	; (Order of operations if multiple buttons pressed)
-	sbrs mpr, 0
-	rjmp Mov_Forward
-
-	sbrs mpr, 1
-	rjmp Mov_Backward
-
-	sbrs mpr, 2
-	rjmp Turn_Right
-
-	sbrs mpr, 4
-	rjmp Turn_Left
-
-	sbrs mpr, 5
-	rjmp Halt
-
-	sbrs mpr, 6
-	rjmp Freeze
-
 	; Debugging - send freeze command from remote
-	cpi mpr, 0b01111111
-	brne Main_End
+	cpi mpr, 0b11111100
+	brne Rest_Checks
 	
+	push mpr
 	ldi data, 0b01010101
 	sts UDR1, data
 DEBUG_Send_Freeze:
@@ -127,13 +110,35 @@ DEBUG_Send_Freeze:
 	rjmp DEBUG_Send_Freeze
 	; Done
 	out PORTB, data
+	pop mpr
+	rjmp Main_End
+
+Rest_Checks:
+	sbrs mpr, 0
+	rjmp Mov_Forward
+
+	sbrs mpr, 1
+	rjmp Mov_Backward
+
+	sbrs mpr, 4
+	rjmp Turn_Right
+
+	sbrs mpr, 5
+	rjmp Turn_Left
+
+	sbrs mpr, 6
+	rjmp Halt
+
+	sbrs mpr, 7
+	rjmp Freeze
+
 
 Main_End:
 	; Set a new previous
 	mov prev, mpr
 
 	; debounce
-	ldi waitcnt, 1
+	ldi waitcnt, 10
 	rcall Wait
 
 	; Restart
