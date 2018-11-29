@@ -27,7 +27,7 @@
 .def	command = r22
 
 .equ	WTime = 100				; Time to wait in wait loop
-.equ	BotAddress = 0b01100110;(Enter your robot's address here (8 bits))
+.equ	BotAddress = 0b01100110		;(Enter your robot's address here (8 bits))
 
 ;/////////////////////////////////////////////////////////////
 ;These macros are the values to make the TekBot Move.
@@ -317,7 +317,7 @@ rx_address_not_frozen:
 	clr selected
 	rjmp rx_address_end
 rx_address_frame_match:
-	ldi selected, 1
+	ldi selected, BotAddress
 
 rx_address_end:
 	pop mpr
@@ -330,7 +330,7 @@ trap: ; Infinite Loop
 rx_command_frame:
 	; Check if our robot is selected
 	cpi selected, BotAddress
-	breq rx_command_frame_done
+	brne rx_command_frame_done
 	; Check what command was sent and handle it
 	cpi mpr, C_MovFwd
 	brne check_MovBck
@@ -372,7 +372,6 @@ rx_command_frame_done:
 ; Handle a Freeze Command from the remote
 HandleFreeze:
 	cli
-	lds mpr, UCSR1B
 	rcall Disable_Receive
 	rcall Enable_Transmit
 
@@ -401,5 +400,5 @@ Wait_For_Sent:
 ;	rcall Disable_Receive
 ;	rcall Enable_Receive
 
-	rcall Wait
+;	rcall Wait
 	ret
